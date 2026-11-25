@@ -83,10 +83,34 @@ interface UpdateProgressEvent {
   info: UpdateInfo | null;
 }
 
-let appVersion = '5.0.2';
+const DISMISSED_UPDATE_STORAGE_KEY = 'kurocat_dismissed_update_version';
+
+function isMacPlatform(): boolean {
+  return /Mac/i.test(navigator.platform) || /Macintosh/i.test(navigator.userAgent);
+}
+
+function loadDismissedVersion(): string | null {
+  try {
+    const saved = window.localStorage.getItem(DISMISSED_UPDATE_STORAGE_KEY);
+    return saved && saved.trim() ? saved.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveDismissedVersion(version: string): void {
+  try {
+    window.localStorage.setItem(DISMISSED_UPDATE_STORAGE_KEY, version);
+  } catch {
+    // Ignore storage quota/sandbox errors
+  }
+}
+
+let appVersion = '5.1.0';
 let latestUpdateInfo: UpdateInfo | null = null;
 let updateBusy = false;
-let dismissedVersion: string | null = null;
+let dismissedVersion: string | null = loadDismissedVersion();
+let currentToastKind: 'update' | 'transient' | null = null;
 let toastAutoHideTimer: number | null = null;
 let sliderDragging = false;
 let altOverride = false;
@@ -139,6 +163,7 @@ const scaleValueEl = document.getElementById('scale-value') as HTMLButtonElement
 const updateToastEl = document.getElementById('update-toast') as HTMLDivElement;
 const updateToastTextEl = document.getElementById('update-toast-text') as HTMLSpanElement;
 const btnToastInstallEl = document.getElementById('btn-toast-install') as HTMLButtonElement;
+const btnToastUnlockEl = document.getElementById('btn-toast-unlock') as HTMLButtonElement;
 const btnToastOpenEl = document.getElementById('btn-toast-open') as HTMLButtonElement;
 const btnToastCloseEl = document.getElementById('btn-toast-close') as HTMLButtonElement;
 const tailPickerBarEl = document.getElementById('tail-picker-bar') as HTMLDivElement;
@@ -211,6 +236,7 @@ function syncEngine3DState(): void {
   }
   engine3d.setCollar(collar);
   engine3d.setHeadphones(shouldWearHeadphonesNow());
+  engine3d.setGameActive(gameActive);
   engine3d.setKeyboardConfig(kbLayout, kbOrient);
   engine3d.setTailKeyConfig(tailMode, tailIds);
   engine3d.setPrivacyMode(privacyActive);
@@ -621,10 +647,49 @@ function setUpdateHint(text: string, mode: 'default' | 'ready' | 'error' = 'defa
   else if (mode === 'error') hint.classList.add('update-error');
 }
 
-function hideUpdateToast(): void {
+function formatAvailableUpdateText(ver: string): string {
+  return window.innerWidth < 250 ? `⬆ v${ver}` : `✨ 新版本 v${ver}`;
+}
+
+function formatLockedToastText(startup = false): string {
+  if (window.innerWidth < 260) {
+    return '🔒 已锁定穿透';
+  }
+  if (isMacPlatform()) {
+    return startup
+      ? '🔒 已保持穿透（Option / 菜单栏解锁）'
+      : '🔒 已锁定穿透（Option / 菜单栏解锁）';
+  }
+  return startup
+    ? '🔒 已保持穿透（Alt / 托盘解锁）'
+    : '🔒 已锁定穿透（Alt / 托盘解锁）';
+}
+
+function showPendingUpdateToast(): boolean {
+  if (
+    updateBusy ||
+    !latestUpdateInfo?.hasUpdate ||
+    dismissedVersion === latestUpdateInfo.latestVersion
+  ) {
+    return false;
+  }
+  showUpdateToast(formatAvailableUpdateText(latestUpdateInfo.latestVersion), {
+    showInstall: Boolean(latestUpdateInfo.downloadUrl),
+    showOpen: !latestUpdateInfo.downloadUrl,
+    kind: 'update',
+  });
+  return true;
+}
+
+function hideUpdateToast(restorePendingUpdate = false): void {
   if (toastAutoHideTimer !== null) {
     window.clearTimeout(toastAutoHideTimer);
     toastAutoHideTimer = null;
+  }
+  const prevKind = currentToastKind;
+  currentToastKind = null;
+  if (restorePendingUpdate && prevKind === 'transient' && showPendingUpdateToast()) {
+    return;
   }
   if (!updateToastEl.classList.contains('hidden')) {
     updateToastEl.classList.add('hidden');
@@ -635,15 +700,24 @@ function hideUpdateToast(): void {
 
 function showUpdateToast(
   text: string,
-  options: { showInstall?: boolean; showOpen?: boolean; autoHideMs?: number; busy?: boolean } = {},
+  options: {
+    showInstall?: boolean;
+    showUnlock?: boolean;
+    showOpen?: boolean;
+    autoHideMs?: number;
+    busy?: boolean;
+    kind?: 'update' | 'transient';
+  } = {},
 ): void {
   if (toastAutoHideTimer !== null) {
     window.clearTimeout(toastAutoHideTimer);
     toastAutoHideTimer = null;
   }
+  currentToastKind = options.kind ?? 'transient';
   updateToastTextEl.textContent = text;
   btnToastInstallEl.classList.toggle('hidden', !options.showInstall);
   btnToastInstallEl.disabled = Boolean(options.busy);
+  btnToastUnlockEl.classList.toggle('hidden', !options.showUnlock);
   btnToastOpenEl.classList.toggle('hidden', !options.showOpen);
   updateToastEl.classList.remove('hidden');
   void invoke('set_update_banner_open', { open: true });
@@ -651,7 +725,7 @@ function showUpdateToast(
 
   if (options.autoHideMs && options.autoHideMs > 0) {
     toastAutoHideTimer = window.setTimeout(() => {
-      hideUpdateToast();
+      hideUpdateToast(true);
     }, options.autoHideMs);
   }
 }
@@ -666,7 +740,7 @@ function handleUpdateProgressEvent(ev: UpdateProgressEvent, fromManual = false):
     case 'checking':
       updateBusy = true;
       setUpdateHint('检测中...');
-      showUpdateToast('🔍 正在检查新版本...', { busy: true });
+      showUpdateToast('🔍 正在检查新版本...', { busy: true, kind: 'transient' });
       break;
     case 'available':
       updateBusy = false;
@@ -674,9 +748,10 @@ function handleUpdateProgressEvent(ev: UpdateProgressEvent, fromManual = false):
         const ver = latestUpdateInfo.latestVersion;
         setUpdateHint(`⬆ v${ver}`, 'ready');
         if (fromManual || dismissedVersion !== ver) {
-          showUpdateToast(`✨ 发现新版本 v${ver}`, {
+          showUpdateToast(formatAvailableUpdateText(ver), {
             showInstall: Boolean(latestUpdateInfo.downloadUrl),
             showOpen: !latestUpdateInfo.downloadUrl,
+            kind: 'update',
           });
         }
       }
@@ -684,14 +759,14 @@ function handleUpdateProgressEvent(ev: UpdateProgressEvent, fromManual = false):
     case 'up_to_date':
       updateBusy = false;
       setUpdateHint(`✓ v${appVersion}`);
-      showUpdateToast(`✓ 已是最新版本 v${appVersion}`, { autoHideMs: 2600 });
+      showUpdateToast(`✓ 已是最新版本 v${appVersion}`, { autoHideMs: 2600, kind: 'transient' });
       break;
     case 'downloading':
     case 'verifying':
     case 'installing':
       updateBusy = true;
       setUpdateHint('更新中...', 'ready');
-      showUpdateToast(`⏳ ${ev.message}`, { busy: true });
+      showUpdateToast(`⏳ ${ev.message}`, { busy: true, kind: 'transient' });
       break;
     case 'error':
       updateBusy = false;
@@ -699,6 +774,7 @@ function handleUpdateProgressEvent(ev: UpdateProgressEvent, fromManual = false):
       showUpdateToast(`⚠ ${ev.message}`, {
         showOpen: true,
         autoHideMs: 5200,
+        kind: 'transient',
       });
       break;
   }
@@ -787,6 +863,12 @@ async function bootstrap(): Promise<void> {
     void triggerInstallUpdate();
   });
 
+  btnToastUnlockEl.addEventListener('click', (e) => {
+    e.stopPropagation();
+    hideUpdateToast(false);
+    void applySettingsPatch({ clickThroughLocked: false });
+  });
+
   btnToastOpenEl.addEventListener('click', (e) => {
     e.stopPropagation();
     const url = latestUpdateInfo?.releaseUrl || 'https://github.com/qianyiai/kurocat/releases/latest';
@@ -795,10 +877,24 @@ async function bootstrap(): Promise<void> {
 
   btnToastCloseEl.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (latestUpdateInfo?.hasUpdate) {
+    if (currentToastKind === 'update' && latestUpdateInfo?.hasUpdate) {
       dismissedVersion = latestUpdateInfo.latestVersion;
+      saveDismissedVersion(latestUpdateInfo.latestVersion);
+      hideUpdateToast(false);
+    } else {
+      hideUpdateToast(true);
     }
-    hideUpdateToast();
+  });
+
+  window.addEventListener('resize', () => {
+    if (
+      !updateToastEl.classList.contains('hidden') &&
+      currentToastKind === 'update' &&
+      latestUpdateInfo?.hasUpdate &&
+      !updateBusy
+    ) {
+      updateToastTextEl.textContent = formatAvailableUpdateText(latestUpdateInfo.latestVersion);
+    }
   });
 
   if (scaleSliderEl) {
@@ -838,9 +934,16 @@ async function bootstrap(): Promise<void> {
     syncMenuUI();
     if (prevLock !== null && prevLock !== settings.clickThroughLocked) {
       if (settings.clickThroughLocked) {
-        showUpdateToast('🔒 已锁定穿透（按住 Alt 点击或 ^ 托盘解锁）', { autoHideMs: 4200 });
+        showUpdateToast(formatLockedToastText(false), {
+          showUnlock: true,
+          autoHideMs: 4200,
+          kind: 'transient',
+        });
       } else {
-        showUpdateToast('🔓 已解除穿透，可直接拖动或右键', { autoHideMs: 2200 });
+        showUpdateToast(
+          window.innerWidth < 260 ? '🔓 已解锁穿透' : '🔓 已解除穿透，可直接拖动或右键',
+          { autoHideMs: 2200, kind: 'transient' },
+        );
       }
     }
   });
@@ -943,6 +1046,8 @@ async function bootstrap(): Promise<void> {
   try {
     gameActive = await invoke<boolean>('get_game_active');
     const wearNow = shouldWearHeadphonesNow();
+    engine.setGameActive(gameActive);
+    engine3d?.setGameActive(gameActive);
     engine.setHeadphones(wearNow);
     engine3d?.setHeadphones(wearNow);
   } catch {
@@ -952,18 +1057,25 @@ async function bootstrap(): Promise<void> {
   await listen<{ active?: boolean; gameName?: string | null }>('kuro-game-active', (ev) => {
     gameActive = Boolean(ev.payload?.active);
     const wearNow = shouldWearHeadphonesNow();
+    engine.setGameActive(gameActive);
+    engine3d?.setGameActive(gameActive);
     engine.setHeadphones(wearNow);
     engine3d?.setHeadphones(wearNow);
   });
 
+  let lastPetHover = false;
   await listen<WindowCursorInfo>('kuro-cursor', (ev) => {
     const c = ev.payload;
     altOverride = Boolean(c.altOverride);
     if (active3d && engine3d) engine3d.onWindowCursor(c.relX, c.relY, c.overCat);
     else engine.onWindowCursor(c.relX, c.relY, c.overCat);
     const interactive = !settings.clickThroughLocked || altOverride;
-    canvas.classList.toggle('pet-hover', c.overCat && interactive);
-    canvas3d.classList.toggle('pet-hover', c.overCat && interactive);
+    const petHover = c.overCat && interactive;
+    if (petHover !== lastPetHover) {
+      lastPetHover = petHover;
+      canvas.classList.toggle('pet-hover', petHover);
+      canvas3d.classList.toggle('pet-hover', petHover);
+    }
   });
 
   canvas.addEventListener('mousemove', (e) => {
@@ -1284,6 +1396,30 @@ async function bootstrap(): Promise<void> {
     }
   } catch {
     // Non-Win7 or unsupported: keep native transparency untouched
+  }
+
+  // Issue #41 safety reminder: when click-through lock was persisted across restarts,
+  // briefly show a one-click [解锁] toast so users can never feel trapped (even at 20%-36% scale).
+  if (settings.clickThroughLocked && !(settings.obsEnabled && settings.obsHidePet)) {
+    showUpdateToast(formatLockedToastText(true), {
+      showUnlock: true,
+      autoHideMs: 5200,
+      kind: 'transient',
+    });
+  }
+
+  // If the background updater already discovered a release before the webview finished loading, show it.
+  try {
+    const cachedUpd = await invoke<UpdateInfo | null>('get_cached_update_info');
+    if (cachedUpd?.hasUpdate) {
+      latestUpdateInfo = cachedUpd;
+      setUpdateHint(`⬆ v${cachedUpd.latestVersion}`, 'ready');
+      if (updateToastEl.classList.contains('hidden')) {
+        showPendingUpdateToast();
+      }
+    }
+  } catch {
+    // Ignore if command unavailable
   }
 }
 

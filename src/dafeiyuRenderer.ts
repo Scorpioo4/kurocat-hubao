@@ -13,6 +13,7 @@ export interface DaFeiYuLayout {
   mouseBtnX: number;
   mouseBtnY: number;
   mouseNX: number;
+  mouseNY?: number;
   mouseLeft: boolean;
   mouseRight: boolean;
   mouseActiveAt: number;
