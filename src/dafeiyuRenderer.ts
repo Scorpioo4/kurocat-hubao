@@ -22,6 +22,8 @@ export interface DaFeiYuLayout {
   privacyMode: boolean;
   privacyTypingAt: number;
   is108: boolean;
+  idleMs?: number;
+  sleepAfterSec?: number;
 }
 
 interface HandState {

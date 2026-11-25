@@ -29,6 +29,57 @@
             <div class="breed-pills" id="breed-pills"></div>
           </div>
 
+          <div class="menu-scale-row">
+            <div class="scale-header">
+              <span class="menu-scale-label">尺寸缩放</span>
+              <button class="scale-value-btn" id="scale-value" type="button" title="点击复位 100%">100%</button>
+            </div>
+            <div class="scale-slider-wrap">
+              <input
+                type="range"
+                id="scale-slider"
+                class="scale-slider"
+                min="20"
+                max="150"
+                step="1"
+                value="100"
+              />
+              <div class="scale-ticks">
+                <span>20%</span>
+                <span class="scale-tick-mid">100%</span>
+                <span>150%</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="menu-scale-row" id="sleep-row">
+            <div class="scale-header">
+              <span class="menu-scale-label">💤 无操作进入睡眠</span>
+              <span class="tail-mode-badge" id="sleep-sec-badge">30 秒</span>
+            </div>
+            <div class="sleep-pills">
+              <button class="kb-pill" data-sleepsec="10" type="button">10秒</button>
+              <button class="kb-pill active" data-sleepsec="30" type="button">30秒</button>
+              <button class="kb-pill" data-sleepsec="60" type="button">1分</button>
+              <button class="kb-pill" data-sleepsec="180" type="button">3分</button>
+              <button class="kb-pill" data-sleepsec="0" type="button">关闭</button>
+            </div>
+            <div class="sleep-custom-row">
+              <span class="sleep-custom-label">自定义秒数</span>
+              <input
+                type="number"
+                id="sleep-sec-input"
+                class="sleep-sec-input"
+                min="0"
+                max="3600"
+                step="5"
+                value="30"
+                title="输入 0 关闭自动睡眠，或输入 5~3600 秒"
+              />
+              <span class="sleep-custom-unit">秒</span>
+            </div>
+          </div>
+
           <div class="menu-scale-row" id="render-mode-row">
             <span class="menu-scale-label">视觉模式（可选 3D / 2D）</span>
             <div class="kb-pills">
@@ -114,29 +165,6 @@
               <span>🐾 在键盘上点选尾巴按键</span>
               <span class="menu-hint" id="tail-keys-count">4 键</span>
             </button>
-          </div>
-
-          <div class="menu-scale-row">
-            <div class="scale-header">
-              <span class="menu-scale-label">尺寸缩放</span>
-              <button class="scale-value-btn" id="scale-value" type="button" title="点击复位 100%">100%</button>
-            </div>
-            <div class="scale-slider-wrap">
-              <input
-                type="range"
-                id="scale-slider"
-                class="scale-slider"
-                min="20"
-                max="150"
-                step="1"
-                value="100"
-              />
-              <div class="scale-ticks">
-                <span>20%</span>
-                <span class="scale-tick-mid">100%</span>
-                <span>150%</span>
-              </div>
-            </div>
           </div>
 
           <div class="menu-sep"></div>

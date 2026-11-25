@@ -45,6 +45,7 @@ interface AppSettings {
   renderMode?: DesktopRenderMode;
   collarColor?: CollarColorId;
   headphoneMode?: HeadphoneMode;
+  sleepAfterSec?: number;
 }
 
 type InputEvent =
@@ -139,7 +140,7 @@ let settings: AppSettings = {
   showKeyBubbles: true,
   soundEnabled: true,
   autostart: false,
-  catBreed: 'black',
+  catBreed: 'hubao',
   mcpEnabled: true,
   mcpPort: 27420,
   keyboardLayout: '65',
@@ -403,10 +404,11 @@ function syncMenuUI(): void {
   }
 
   engine.showKeyBubbles = settings.showKeyBubbles;
-  engine.setCatAppearance(activeCat?.id || 'black', activeCat);
+  engine.setCatAppearance(activeCat?.id || 'hubao', activeCat);
   engine.setHeadphones(shouldWearHeadphonesNow());
   engine.setKeyboardConfig(kbLayout, kbOrient);
   engine.setTailKeyConfig(tailMode, tailIds);
+  engine.setSleepAfterSec(typeof settings.sleepAfterSec === 'number' ? settings.sleepAfterSec : 30);
   if (!sliderDragging) {
     engine.setRenderScale(settings.scale);
   }

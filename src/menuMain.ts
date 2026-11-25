@@ -28,6 +28,7 @@ interface AppSettings {
   renderMode?: '2d' | '3d';
   collarColor?: 'none' | 'red' | 'blue' | 'pink' | 'green';
   headphoneMode?: 'auto' | 'on' | 'off';
+  sleepAfterSec?: number;
 }
 
 interface UpdateInfo {
@@ -70,7 +71,7 @@ let settings: AppSettings = {
   showKeyBubbles: true,
   soundEnabled: true,
   autostart: false,
-  catBreed: 'black',
+  catBreed: 'hubao',
   mcpEnabled: true,
   mcpPort: 27420,
   keyboardLayout: '65',
@@ -84,6 +85,7 @@ let settings: AppSettings = {
   renderMode: '3d',
   collarColor: 'none',
   headphoneMode: 'off',
+  sleepAfterSec: 30,
 };
 
 let catList: CatSkinConfig[] = [...DEFAULT_BUILTIN_CATS];
@@ -102,6 +104,8 @@ const tailModeBadgeEl = document.getElementById('tail-mode-badge') as HTMLSpanEl
 const tailKeysCountEl = document.getElementById('tail-keys-count') as HTMLSpanElement;
 const btnObsHideEl = document.getElementById('btn-obs-hide') as HTMLButtonElement;
 const btnCheckUpdateEl = document.getElementById('btn-check-update') as HTMLButtonElement | null;
+const sleepSecBadgeEl = document.getElementById('sleep-sec-badge') as HTMLSpanElement | null;
+const sleepSecInputEl = document.getElementById('sleep-sec-input') as HTMLInputElement | null;
 
 function switchTab(nextTab: MenuTabId): void {
   activeTab = nextTab;
@@ -254,6 +258,22 @@ function syncUI(): void {
   const headphoneRowEl = document.getElementById('headphone-row');
   if (headphoneRowEl) {
     headphoneRowEl.classList.toggle('hidden', isSpriteBreed);
+  }
+
+  const sleepSec = typeof settings.sleepAfterSec === 'number' ? settings.sleepAfterSec : 30;
+  document.querySelectorAll<HTMLButtonElement>('[data-sleepsec]').forEach((btn) => {
+    btn.classList.toggle('active', Number(btn.dataset.sleepsec) === sleepSec);
+  });
+  if (sleepSecBadgeEl) {
+    sleepSecBadgeEl.textContent =
+      sleepSec === 0
+        ? '已关闭'
+        : sleepSec >= 60 && sleepSec % 60 === 0
+          ? `${sleepSec / 60} 分钟`
+          : `${sleepSec} 秒`;
+  }
+  if (sleepSecInputEl && document.activeElement !== sleepSecInputEl) {
+    sleepSecInputEl.value = String(sleepSec);
   }
 
   const headerEl = document.getElementById('menu-header');
@@ -470,6 +490,23 @@ async function bootstrap(): Promise<void> {
     });
   }
 
+  if (sleepSecInputEl) {
+    const commitCustomSleep = () => {
+      const raw = Math.round(Number(sleepSecInputEl.value));
+      if (!Number.isFinite(raw)) return;
+      const clamped = raw <= 0 ? 0 : Math.max(5, Math.min(3600, raw));
+      sleepSecInputEl.value = String(clamped);
+      void applySettingsPatch({ sleepAfterSec: clamped });
+    };
+    sleepSecInputEl.addEventListener('change', commitCustomSleep);
+    sleepSecInputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        commitCustomSleep();
+        sleepSecInputEl.blur();
+      }
+    });
+  }
+
   menuEl.addEventListener('click', (e) => {
     const tabBtn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-tab]');
     if (tabBtn) {
@@ -481,9 +518,18 @@ async function bootstrap(): Promise<void> {
     }
 
     const target = (e.target as HTMLElement).closest<HTMLElement>(
-      '[data-action], [data-breed], [data-rendermode], [data-collar], [data-headphonemode], [data-kblayout], [data-kborient], [data-tailmode]',
+      '[data-action], [data-breed], [data-rendermode], [data-collar], [data-headphonemode], [data-kblayout], [data-kborient], [data-tailmode], [data-sleepsec]',
     );
     if (!target) return;
+
+    const sleepSecAttr = target.dataset.sleepsec;
+    if (sleepSecAttr !== undefined) {
+      const val = Math.round(Number(sleepSecAttr));
+      if (Number.isFinite(val)) {
+        void applySettingsPatch({ sleepAfterSec: val <= 0 ? 0 : Math.max(5, Math.min(3600, val)) });
+      }
+      return;
+    }
 
     const headphoneAttr = target.dataset.headphonemode;
     if (headphoneAttr === 'auto' || headphoneAttr === 'on' || headphoneAttr === 'off') {

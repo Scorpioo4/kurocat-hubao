@@ -242,6 +242,7 @@ export class KuroCatEngine {
   public keyboardLayout: KeyboardLayoutId = '65';
   public keyboardOrientation: KeyboardOrientation = 'cat';
   public tailKeyMode: TailKeyMode = 'smart';
+  public sleepAfterSec = 30;
   private tailKeyIdSet = new Set<string>(DEFAULT_TAIL_KEY_IDS);
   private tailPickerActive = false;
   private tailPickerSelection: ReadonlySet<string> | null = null;
@@ -303,6 +304,15 @@ export class KuroCatEngine {
 
   public setRenderScale(scale: number): void {
     this.renderScale = Math.max(0.2, Math.min(1.5, scale));
+    this.wakeRendering();
+  }
+
+  public setSleepAfterSec(sec: number): void {
+    const clean = Number.isFinite(sec) ? Math.round(sec) : 30;
+    this.sleepAfterSec = clean <= 0 ? 0 : Math.max(5, Math.min(3600, clean));
+    if (this.sleepAfterSec === 0) {
+      this.asleep = false;
+    }
     this.wakeRendering();
   }
 
@@ -556,6 +566,18 @@ export class KuroCatEngine {
     ) {
       return true;
     }
+
+    // 3) For Hubao: pressing keys on the outer tail-adjacent edge of the keyboard (which is the physical
+    // leftmost column Esc/Tab/Caps/LShift/LCtrl/1/Q in cat-facing orientation!) directly slaps with Hubao's fluffy tail!
+    if (this.catBreed === 'hubao' && !EDGE_PROTECTED_WASD_IDS.has(spec.id)) {
+      const edgeThresholdX =
+        this.keyboardLayout === '108'
+          ? this.kbCenterX + this.kbWidth * 0.22
+          : this.kbCenterX + this.kbWidth * 0.34;
+      if (targetPoint.x >= edgeThresholdX) {
+        return true;
+      }
+    }
     return false;
   }
 
@@ -672,6 +694,8 @@ export class KuroCatEngine {
       privacyMode: this.privacyMode,
       privacyTypingAt: this.privacyTypingAt,
       is108: this.keyboardLayout === '108',
+      idleMs: Math.max(0, performance.now() - this.lastInputAt),
+      sleepAfterSec: this.sleepAfterSec,
     };
   }
 
@@ -1759,13 +1783,24 @@ export class KuroCatEngine {
     const isCatMode = this.catBreed !== 'dafeiyu' && this.catBreed !== 'hubao';
 
     // 1) Alive cat emotional states: sleep (loaf + Zzz), curious (laser-pointer eyes), annoy -> cross (airplane ears + tail desk-thump), idle fidgets!
-    const sleepAfterMs = this.embedded ? 18_000 : 28_000;
+    const sleepEnabled = this.sleepAfterSec > 0;
+    const sleepAfterMs = this.embedded ? 18_000 : this.sleepAfterSec * 1000;
     const idleMs = now - this.lastInputAt;
-    if (isCatMode && !this.privacyMode && !this.asleep && this.petEnergy < 0.15 && idleMs > sleepAfterMs) {
+    if (
+      isCatMode &&
+      sleepEnabled &&
+      !this.privacyMode &&
+      !this.asleep &&
+      this.petEnergy < 0.15 &&
+      idleMs > sleepAfterMs
+    ) {
       this.asleep = true;
       this.isCross = false;
       this.idleAct = null;
       this.nextZAt = now + 900;
+    }
+    if (!sleepEnabled && this.asleep) {
+      this.asleep = false;
     }
     const wantSleep = isCatMode && this.asleep && !this.privacyMode ? 1 : 0;
     this.sleepAmount += (wantSleep - this.sleepAmount) * (1 - Math.exp(-(wantSleep ? 1.5 : 6.5) * dt));

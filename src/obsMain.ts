@@ -92,7 +92,7 @@ let catList: CatSkinConfig[] = [...DEFAULT_BUILTIN_CATS];
 let currentSettings: ObsAppSettings = {
   scale: 1,
   showKeyBubbles: true,
-  catBreed: 'black',
+  catBreed: 'hubao',
   keyboardLayout: '65',
   keyboardOrientation: 'cat',
   tailKeyMode: 'smart',

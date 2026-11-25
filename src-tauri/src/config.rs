@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn default_cat_breed() -> String {
-    "black".to_string()
+    "hubao".to_string()
 }
 
 fn default_mcp_enabled() -> bool {
@@ -58,6 +58,18 @@ pub fn normalize_collar_color(raw: &str) -> String {
 
 pub fn default_headphone_mode() -> String {
     "off".to_string()
+}
+
+pub fn default_sleep_after_sec() -> u32 {
+    30
+}
+
+pub fn normalize_sleep_after_sec(raw: u32) -> u32 {
+    if raw == 0 {
+        0
+    } else {
+        raw.clamp(5, 3600)
+    }
 }
 
 pub fn normalize_headphone_mode(raw: &str) -> String {
@@ -183,6 +195,8 @@ pub struct AppSettings {
     pub collar_color: String,
     #[serde(default = "default_headphone_mode")]
     pub headphone_mode: String,
+    #[serde(default = "default_sleep_after_sec")]
+    pub sleep_after_sec: u32,
 }
 
 impl Default for AppSettings {
@@ -214,6 +228,7 @@ impl Default for AppSettings {
             render_mode: default_render_mode(),
             collar_color: default_collar_color(),
             headphone_mode: default_headphone_mode(),
+            sleep_after_sec: default_sleep_after_sec(),
         }
     }
 }
@@ -258,6 +273,7 @@ pub fn load_settings() -> AppSettings {
             parsed.render_mode = normalize_render_mode(&parsed.render_mode);
             parsed.collar_color = normalize_collar_color(&parsed.collar_color);
             parsed.headphone_mode = normalize_headphone_mode(&parsed.headphone_mode);
+            parsed.sleep_after_sec = normalize_sleep_after_sec(parsed.sleep_after_sec);
             return parsed;
         }
     }

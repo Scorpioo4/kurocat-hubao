@@ -1,5 +1,7 @@
 import headUrl from './assets/hubao_live2d/live2d_head.png';
 import bodyUrl from './assets/hubao_live2d/live2d_body.png';
+import sleepUrl from './assets/hubao_live2d/live2d_sleep.png';
+import zzzUrl from './assets/hubao_live2d/fx_zzz.png';
 import sighUrl from './assets/hubao_sticker/fx_sigh.png';
 import heartUrl from './assets/hubao_sticker/fx_heart.png';
 import starUrl from './assets/hubao_sticker/fx_star.png';
@@ -31,7 +33,7 @@ interface StickerParticle {
   scale: number;
   rot: number;
   vrot: number;
-  kind: 'sigh' | 'heart' | 'star';
+  kind: 'sigh' | 'heart' | 'star' | 'zzz';
 }
 
 const OUTLINE_COLOR = '#2d1c12';
@@ -50,7 +52,8 @@ const OUTLINE_COLOR = '#2d1c12';
 export class HubaoRenderer {
   private headImg: HTMLImageElement;
   private bodyImg: HTMLImageElement;
-  private fx: Record<'sigh' | 'heart' | 'star', HTMLImageElement>;
+  private sleepImg: HTMLImageElement;
+  private fx: Record<'sigh' | 'heart' | 'star' | 'zzz', HTMLImageElement>;
 
   private lastKeyAt = -10000;
   private lastKeyGazeAt = -10000;
@@ -59,6 +62,7 @@ export class HubaoRenderer {
   private lastMouseClickAt = -10000;
   private grumpyUntil = -10000;
   private lastSighAt = -10000;
+  private nextZzzAt = 0;
   private keyTimes: number[] = [];
   private typingHeat = 0;
 
@@ -66,6 +70,7 @@ export class HubaoRenderer {
   private grumpyAmount = 0;
   private happyAmount = 0;
   private privacyAmount = 0;
+  private sleepAmount = 0;
   private blinkAmount = 0;
   private nextBlinkAt = performance.now() + 2800 + Math.random() * 2400;
   private blinkPhase = -1; // -1 = not blinking, 0..1 = blinking curve
@@ -131,10 +136,12 @@ export class HubaoRenderer {
     };
     this.headImg = mk(headUrl);
     this.bodyImg = mk(bodyUrl);
+    this.sleepImg = mk(sleepUrl);
     this.fx = {
       sigh: mk(sighUrl),
       heart: mk(heartUrl),
       star: mk(starUrl),
+      zzz: mk(zzzUrl),
     };
   }
 
@@ -277,7 +284,7 @@ export class HubaoRenderer {
     const charX = (layout.is108 ? 268 : 196) + this.bodyShiftX;
     this.particles.push({
       x: charX + (Math.random() > 0.5 ? 1 : -1) * (16 + Math.random() * 24),
-      y: 88 + (Math.random() - 0.5) * 14,
+      y: 108 + (Math.random() - 0.5) * 14,
       vx: (Math.random() - 0.5) * 0.6,
       vy: -0.9 - Math.random() * 0.5,
       life: 1,
@@ -325,13 +332,44 @@ export class HubaoRenderer {
       !isPetted &&
       (layout.mouseLeft || layout.mouseRight || now - layout.mouseActiveAt < 900);
 
+    const sleepSec = typeof layout.sleepAfterSec === 'number' ? layout.sleepAfterSec : 30;
+    const idleMs = layout.idleMs ?? 0;
+    const isSleeping =
+      sleepSec > 0 &&
+      !layout.privacyMode &&
+      !isPetted &&
+      !isWorking &&
+      !mouseMode &&
+      idleMs >= sleepSec * 1000;
+
     // Smooth expression weight blending (silky Live2D transitions!)
     const wantGrumpy = isWorking ? 1 : 0;
     const wantHappy = isPetted ? 1 : 0;
     const wantPrivacy = layout.privacyMode ? 1 : 0;
+    const wantSleep = isSleeping ? 1 : 0;
     this.grumpyAmount += (wantGrumpy - this.grumpyAmount) * (1 - Math.exp(-(wantGrumpy ? 18 : 6.5) * dt));
     this.happyAmount += (wantHappy - this.happyAmount) * (1 - Math.exp(-13 * dt));
     this.privacyAmount += (wantPrivacy - this.privacyAmount) * (1 - Math.exp(-14 * dt));
+    this.sleepAmount += (wantSleep - this.sleepAmount) * (1 - Math.exp(-(wantSleep ? 3.8 : 12.0) * dt));
+    if (this.sleepAmount < 0.002 && wantSleep === 0) this.sleepAmount = 0;
+
+    // Spawn cozy hand-drawn Zzz particles while Hubao naps on his blue cloud pillow!
+    if (this.sleepAmount > 0.65 && now >= this.nextZzzAt) {
+      this.nextZzzAt = now + 1050 + Math.random() * 350;
+      const charX = (layout.is108 ? 268 : 196) + this.bodyShiftX;
+      const kbTopEdge = layout.kbCenterY - layout.kbHeight * 0.34;
+      this.particles.push({
+        x: charX + 42 + (Math.random() - 0.5) * 16,
+        y: kbTopEdge - 108 + (Math.random() - 0.5) * 10,
+        vx: 0.38 + Math.random() * 0.25,
+        vy: -0.62 - Math.random() * 0.22,
+        life: 1,
+        scale: 0.72 + Math.random() * 0.25,
+        rot: -0.10 + (Math.random() - 0.5) * 0.14,
+        vrot: (Math.random() - 0.5) * 0.008,
+        kind: 'zzz',
+      });
+    }
 
     // Smooth natural blinking (sinusoidal close-open curve)
     if (this.blinkPhase < 0 && now >= this.nextBlinkAt && !isPetted && !layout.privacyMode) {
@@ -361,7 +399,7 @@ export class HubaoRenderer {
 
     const charX = layout.is108 ? 268 : 196;
     if (isPetted && Math.random() < 0.085) {
-      this.spawnJoyParticle(charX + this.bodyShiftX, 102);
+      this.spawnJoyParticle(charX + this.bodyShiftX, 118);
     }
 
     // Body spring physics
@@ -466,7 +504,7 @@ export class HubaoRenderer {
 
     // Fluffy thick-outline tail physics anchored to lower right hip
     const gTail = this.computeGeom(now, layout);
-    const tailRoot = gTail.bodyPointToWorld(0.76, 0.72);
+    const tailRoot = gTail.bodyPointToWorld(0.82, 0.68);
     const wagSpeed = isPetted
       ? 0.014
       : isWorking
@@ -510,10 +548,10 @@ export class HubaoRenderer {
     }
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
-      p.x += p.vx;
+      p.x += p.vx + (p.kind === 'zzz' ? Math.sin(now * 0.004 + i * 2) * 0.22 : 0);
       p.y += p.vy;
       p.rot += p.vrot;
-      p.life -= (p.kind === 'sigh' ? 0.017 : 0.020) * (dt * 60);
+      p.life -= (p.kind === 'zzz' ? 0.0085 : p.kind === 'sigh' ? 0.017 : 0.020) * (dt * 60);
       if (p.life <= 0) this.particles.splice(i, 1);
     }
   }
@@ -522,18 +560,20 @@ export class HubaoRenderer {
     const charX = layout.is108 ? 268 : 196;
     const kbTopEdge = layout.kbCenterY - layout.kbHeight * 0.34;
     const breath = Math.sin(now * 0.0034) * 2.0 + this.bodyBob * 3.0 + this.bodyDiveY;
-    const bodyW = layout.is108 ? 168 : 160;
-    const bodyH = bodyW * (460 / 457);
-    const headW = layout.is108 ? 228 : 218;
+    // Chubby compact sticker proportions: wide sturdy round torso (~1.06:1 face-to-body width)
+    // with a cozy short squat height so the big round head sits snugly right on top of the shoulders!
+    const bodyW = layout.is108 ? 204 : 196;
+    const bodyH = bodyW * 0.78;
+    const headW = layout.is108 ? 228 : 220;
     const headH = headW * (385 / 520);
 
     const bodyPivotX = charX + this.bodyShiftX;
-    const bodyBaseY = kbTopEdge + 54 + breath;
-    const bodyPivotY = bodyBaseY - 36;
+    const bodyBaseY = kbTopEdge + 46 + breath;
+    const bodyPivotY = bodyBaseY - 34;
 
     const bodyPointToWorld = (normX: number, normY: number) => {
       const lx = (normX - 0.5) * bodyW;
-      const ly = normY * bodyH - bodyH + 36;
+      const ly = normY * bodyH - bodyH + 34;
       const c = Math.cos(this.bodyTilt);
       const s = Math.sin(this.bodyTilt);
       return {
@@ -542,11 +582,11 @@ export class HubaoRenderer {
       };
     };
 
-    // Neck pivot sits organically at the upper-center of the armless torso
-    const neckWorld = bodyPointToWorld(0.5, 0.14);
+    // Snug short neck pivot so chin rests cozily into the wide chubby shoulders (zero skinny neck!)
+    const neckWorld = bodyPointToWorld(0.5, 0.18);
     const totalHeadTilt = this.bodyTilt * 0.55 + this.headTilt;
     const headAnchorX = neckWorld.x + this.eyeGazeX * 3.5;
-    const headAnchorY = neckWorld.y + 8 + this.headNodY;
+    const headAnchorY = neckWorld.y + 18 + this.headNodY;
     // Head center in world coordinates (for eye gaze direction & privacy paw targets)
     const headCenterOffsetY = -headH * 0.38;
     const hc = Math.cos(totalHeadTilt);
@@ -581,60 +621,90 @@ export class HubaoRenderer {
     };
   }
 
-  /** Layer 1 (BEFORE keyboard & mouse): fluffy sticker tail back + armless body + rotating Live2D head & face! */
+  /** Layer 1 (BEFORE keyboard & mouse): awake Live2D Hubao OR sleeping Hubao on blue cloud pillow! */
   public renderBody(ctx: CanvasRenderingContext2D, now: number, layout: DaFeiYuLayout): void {
-    const g = this.computeGeom(now, layout);
+    const awakeAlpha = Math.max(0, 1 - this.sleepAmount * 1.15);
+    const sleepAlpha = Math.min(1, this.sleepAmount * 1.15);
 
-    // 1) Thick-outline sticker cat tail emerging naturally behind right hip!
-    const tailRoot = g.bodyPointToWorld(0.76, 0.72);
-    const tipX = tailRoot.x + this.tail.relX;
-    const tipY = tailRoot.y + this.tail.relY;
-    this.drawStickerTail(
-      ctx,
-      tailRoot.x,
-      tailRoot.y,
-      tipX,
-      tipY,
-      this.tail.phase,
-      this.tail.activeWag,
-      layout.logicalW,
-      'back',
-    );
-
-    ctx.save();
-    // Clip cleanly along the top edge of the keyboard so lower torso rests neatly behind it
-    ctx.beginPath();
-    ctx.rect(0, 0, layout.logicalW, layout.kbCenterY - layout.kbHeight * 0.28);
-    ctx.clip();
-
-    // 2) Armless mochi torso with gentle breathing squash-and-stretch
-    if (this.bodyImg.complete && this.bodyImg.naturalWidth > 0) {
+    if (awakeAlpha > 0.01) {
+      const g = this.computeGeom(now, layout);
       ctx.save();
-      ctx.translate(g.bodyPivotX, g.bodyPivotY);
-      ctx.rotate(this.bodyTilt);
-      ctx.scale(1 + this.bodyBob * 0.026, 1 - this.bodyBob * 0.022);
-      ctx.drawImage(this.bodyImg, -g.bodyW * 0.5, -g.bodyH + 36, g.bodyW, g.bodyH);
+      ctx.globalAlpha = awakeAlpha;
+      const sinkY = this.sleepAmount * 22;
+      ctx.translate(0, sinkY);
+
+      // 1) Thick-outline sticker cat tail emerging naturally behind right hip!
+      const tailRoot = g.bodyPointToWorld(0.82, 0.68);
+      const tipX = tailRoot.x + this.tail.relX;
+      const tipY = tailRoot.y + this.tail.relY;
+      this.drawStickerTail(
+        ctx,
+        tailRoot.x,
+        tailRoot.y,
+        tipX,
+        tipY,
+        this.tail.phase,
+        this.tail.activeWag,
+        layout.logicalW,
+        'back',
+      );
+
+      ctx.save();
+      // Clip cleanly along the top edge of the keyboard so lower torso rests neatly behind it
+      ctx.beginPath();
+      ctx.rect(0, 0, layout.logicalW, layout.kbCenterY - layout.kbHeight * 0.28);
+      ctx.clip();
+
+      // 2) Armless mochi torso with gentle breathing squash-and-stretch
+      if (this.bodyImg.complete && this.bodyImg.naturalWidth > 0) {
+        ctx.save();
+        ctx.translate(g.bodyPivotX, g.bodyPivotY);
+        ctx.rotate(this.bodyTilt);
+        ctx.scale(1 + this.bodyBob * 0.026, 1 - this.bodyBob * 0.022);
+        ctx.drawImage(this.bodyImg, -g.bodyW * 0.5, -g.bodyH + 34, g.bodyW, g.bodyH);
+        ctx.restore();
+      }
+
+      // 3) Independently rotating, bobbing Live2D Hubao head + dynamic mouse-tracking eyes & mouth!
+      if (this.headImg.complete && this.headImg.naturalWidth > 0) {
+        ctx.save();
+        ctx.translate(g.headAnchorX, g.headAnchorY);
+        ctx.rotate(g.totalHeadTilt);
+        const hSqX = 1 + this.bodyBob * 0.024;
+        const hSqY = 1 - this.bodyBob * 0.020;
+        ctx.scale(hSqX, hSqY);
+
+        // Draw hand-drawn sticker head base (ears, crayon fur, whiskers, blushes, pink nose!)
+        ctx.drawImage(this.headImg, -g.headW * 0.5, -g.headH * 0.88, g.headW, g.headH);
+
+        // Draw Live2D animated green eyes, grumpy typing eyelids, happy laughing eyes, and mouth!
+        this.renderLiveFace(ctx, g.headW, g.headH);
+        ctx.restore();
+      }
+
+      ctx.restore();
       ctx.restore();
     }
 
-    // 3) Independently rotating, bobbing Live2D Hubao head + dynamic mouse-tracking eyes & mouth!
-    if (this.headImg.complete && this.headImg.naturalWidth > 0) {
+    // 4) Sleeping Hubao curled up on his blue cloud pillow with deep gentle breathing!
+    if (sleepAlpha > 0.01 && this.sleepImg.complete && this.sleepImg.naturalWidth > 0) {
+      const charX = (layout.is108 ? 268 : 196) + this.bodyShiftX;
+      const kbTopEdge = layout.kbCenterY - layout.kbHeight * 0.32;
+      const sleepW = layout.is108 ? 268 : 254;
+      const sleepH = sleepW * (this.sleepImg.naturalHeight / this.sleepImg.naturalWidth);
+      // Deep, slow, cozy sleeping breath (~3.2s cycle)
+      const slowBreath = Math.sin(now * 0.0020);
+      const sx = 1 + slowBreath * 0.024;
+      const sy = 1 - slowBreath * 0.020;
+
       ctx.save();
-      ctx.translate(g.headAnchorX, g.headAnchorY);
-      ctx.rotate(g.totalHeadTilt);
-      const hSqX = 1 + this.bodyBob * 0.024;
-      const hSqY = 1 - this.bodyBob * 0.020;
-      ctx.scale(hSqX, hSqY);
-
-      // Draw hand-drawn sticker head base (ears, crayon fur, whiskers, blushes, pink nose!)
-      ctx.drawImage(this.headImg, -g.headW * 0.5, -g.headH * 0.88, g.headW, g.headH);
-
-      // Draw Live2D animated green eyes, grumpy typing eyelids, happy laughing eyes, and mouth!
-      this.renderLiveFace(ctx, g.headW, g.headH);
+      ctx.globalAlpha = sleepAlpha;
+      // Anchor at bottom center of the blue pillow right behind the keyboard!
+      ctx.translate(charX, kbTopEdge + 12 + (1 - sleepAlpha) * 14);
+      ctx.scale(sx, sy);
+      ctx.drawImage(this.sleepImg, -sleepW * 0.5, -sleepH, sleepW, sleepH);
       ctx.restore();
     }
-
-    ctx.restore();
   }
 
   /**
@@ -685,110 +755,135 @@ export class HubaoRenderer {
         continue;
       }
 
-      // Open / grumpy-half-closed sparkling green sticker eyes!
+      // Open / grumpy-flat-top sparkling green sticker eyes (matching sticker #1 & #2!)
       ctx.save();
       const openScaleY = Math.max(0.18, 1 - this.blinkAmount * 0.85);
       ctx.translate(ecx, ecy);
       ctx.scale(1, openScaleY);
 
-      // Clip inside exact round eye socket
+      const gAmt = this.grumpyAmount;
+
+      // Helper: build the exact eye contour — full round circle at rest (sticker #1),
+      // smoothly morphing into a clean flat-topped tilted bowl shape when grumpy (sticker #2)
+      // with ZERO ugly drooping fur lid or leftover top circle arc!
+      const traceEyeShape = () => {
+        if (gAmt <= 0.02) {
+          ctx.beginPath();
+          ctx.ellipse(0, 0, eyeRx, eyeRy, 0, 0, Math.PI * 2);
+          return;
+        }
+        // Cut only the top ~26-30% cleanly (never half the eye!) with cute slight inner downward slant
+        const cutBaseY = -eyeRy * (1.0 - 0.56 * gAmt); // at gAmt=1 -> -0.44 * eyeRy (28% from top!)
+        const slant = eyeRy * 0.19 * gAmt; // inner side slightly lower like sticker #2!
+        const yLeft = side === -1 ? cutBaseY - slant : cutBaseY + slant;
+        const yRight = side === -1 ? cutBaseY + slant : cutBaseY - slant;
+
+        // Intersect horizontal/slanted lid line with ellipse boundary cleanly
+        const clampRatio = (yVal: number) => Math.max(-0.96, Math.min(0.96, yVal / eyeRy));
+        const sinL = clampRatio(yLeft);
+        const sinR = clampRatio(yRight);
+        const xLeft = -eyeRx * Math.sqrt(Math.max(0.04, 1 - sinL * sinL));
+        const xRight = eyeRx * Math.sqrt(Math.max(0.04, 1 - sinR * sinR));
+
+        const angLeft = Math.atan2(yLeft / eyeRy, xLeft / eyeRx);
+        const angRight = Math.atan2(yRight / eyeRy, xRight / eyeRx);
+
+        ctx.beginPath();
+        // Trace straight flat-top grumpy lid from left corner to right corner,
+        // then smoothly around the full round lower bowl from right -> bottom -> left!
+        ctx.moveTo(xLeft, yLeft);
+        ctx.lineTo(xRight, yRight);
+        // Clockwise (in canvas Y-down): right (~ -0.4 rad) -> bottom (+PI/2) -> left (~ PI + 0.4 rad)
+        const endAng = angLeft < angRight ? angLeft + Math.PI * 2 : angLeft;
+        ctx.ellipse(0, 0, eyeRx, eyeRy, 0, angRight, endAng, false);
+        ctx.closePath();
+      };
+
+      // Clip strictly inside the clean eye contour
       ctx.save();
-      ctx.beginPath();
-      ctx.ellipse(0, 0, eyeRx, eyeRy, 0, 0, Math.PI * 2);
+      traceEyeShape();
       ctx.clip();
 
-      // Fresh sage-green iris matching Hubao's real eyes & hand-drawn stickers!
-      const irisGrad = ctx.createRadialGradient(0, eyeRy * 0.25, 2, 0, 0, eyeRx * 1.15);
-      irisGrad.addColorStop(0.0, '#cfe6a6');
+      // Fresh sage/apple-green iris matching sticker #1 & #2
+      const irisGrad = ctx.createRadialGradient(0, eyeRy * 0.28, 2, 0, 0, eyeRx * 1.15);
+      irisGrad.addColorStop(0.0, '#d2e9aa');
       irisGrad.addColorStop(0.55, '#95be72');
       irisGrad.addColorStop(1.0, '#6a904c');
       ctx.fillStyle = irisGrad;
-      ctx.fillRect(-eyeRx - 2, -eyeRy - 2, eyeRx * 2 + 4, eyeRy * 2 + 4);
+      ctx.fillRect(-eyeRx - 3, -eyeRy - 3, eyeRx * 2 + 6, eyeRy * 2 + 6);
 
-      // Huge glossy dark pupil tracking mouse & keycaps smoothly 360°!
-      const px = this.eyeGazeX * (eyeRx * 0.36);
-      const py = this.eyeGazeY * (eyeRy * 0.34);
-      const pupilRx = eyeRx * 0.67;
-      const pupilRy = eyeRy * 0.70;
+      // Cute slight cross-eyed inward convergence at rest (matching sticker #1: left pupil shifts
+      // slightly right toward nose, right pupil shifts slightly left toward nose, revealing crisp
+      // symmetric green crescent along outer-bottom rim!) + silky 360° mouse/key gaze tracking!
+      const inwardBiasX = -side * (eyeRx * (0.23 - gAmt * 0.06));
+      const baseBiasY = -eyeRy * (0.07 + gAmt * 0.14);
+      let px = inwardBiasX + this.eyeGazeX * (eyeRx * 0.27);
+      let py = baseBiasY + this.eyeGazeY * (eyeRy * 0.24);
+      // Soft clamp so pupil never detaches from eye socket
+      const maxShift = eyeRx * 0.42;
+      const pMag = Math.hypot(px, py);
+      if (pMag > maxShift) {
+        px = (px / pMag) * maxShift;
+        py = (py / pMag) * maxShift;
+      }
+
+      const pupilRx = eyeRx * 0.70;
+      const pupilRy = eyeRy * 0.72;
 
       ctx.fillStyle = '#181412';
       ctx.beginPath();
       ctx.ellipse(px, py, pupilRx, pupilRy, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Subtle glossy olive rim highlight at bottom of pupil
-      ctx.strokeStyle = 'rgba(208, 234, 158, 0.38)';
-      ctx.lineWidth = 1.6;
+      // Subtle glossy olive rim sheen at bottom of pupil
+      ctx.strokeStyle = 'rgba(208, 234, 158, 0.34)';
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.arc(px, py + 0.5, pupilRx * 0.82, Math.PI * 0.18, Math.PI * 0.82);
+      ctx.arc(px, py + 0.5, pupilRx * 0.80, Math.PI * 0.18, Math.PI * 0.82);
       ctx.stroke();
 
-      // Crisp sparkling white eye catchlights (big main + cute secondary)
-      const hlX = px - pupilRx * 0.32;
-      const hlY = py - pupilRy * 0.34;
+      // Crisp sparkling white eye catchlights (positioned like sticker #1, tucked neatly when grumpy!)
+      const hlX = px + (side === -1 ? -pupilRx * 0.26 : -pupilRx * 0.22);
+      const hlY = py - pupilRy * (0.30 - gAmt * 0.16);
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.arc(hlX, hlY, eyeRx * 0.24, 0, Math.PI * 2);
+      ctx.arc(hlX, hlY, eyeRx * (0.23 - gAmt * 0.06), 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
-      ctx.beginPath();
-      ctx.arc(px + pupilRx * 0.34, py + pupilRy * 0.30, eyeRx * 0.10, 0, Math.PI * 2);
-      ctx.fill();
-
-      // GRUMPY TYPING EYELID (Sticker #4!): flat slightly-angled cream fur eyelid drops smoothly
-      // over the upper half of both eyes when Hubao is forced to work on the keyboard!
-      if (this.grumpyAmount > 0.03) {
-        const lidDrop = -eyeRy * 1.05 + this.grumpyAmount * (eyeRy * 1.08);
-        const tiltDelta = side * (-eyeRy * 0.18 * this.grumpyAmount); // inner corner slightly lower = super grumpy cute!
-        const yOuter = lidDrop - tiltDelta;
-        const yInner = lidDrop + tiltDelta;
-        const xL = -eyeRx - 3;
-        const xR = eyeRx + 3;
-        const yL = side === -1 ? yOuter : yInner;
-        const yR = side === -1 ? yInner : yOuter;
-
-        // Fill upper eyelid with matching pale vanilla-cream fur
-        ctx.fillStyle = '#f6e4cc';
+      if (gAmt < 0.7) {
+        ctx.fillStyle = `rgba(255, 255, 255, ${(0.88 * (1 - gAmt)).toFixed(2)})`;
         ctx.beginPath();
-        ctx.moveTo(xL, -eyeRy - 4);
-        ctx.lineTo(xR, -eyeRy - 4);
-        ctx.lineTo(xR, yR);
-        ctx.lineTo(xL, yL);
-        ctx.closePath();
+        ctx.arc(px + pupilRx * 0.32, py + pupilRy * 0.28, eyeRx * 0.095, 0, Math.PI * 2);
         ctx.fill();
-
-        // Thick dark-chocolate-brown grumpy upper eyelid line!
-        ctx.strokeStyle = OUTLINE_COLOR;
-        ctx.lineWidth = 3.8;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(xL, yL);
-        ctx.lineTo(xR, yR);
-        ctx.stroke();
       }
 
       ctx.restore(); // end eye clip
 
-      // Crisp dark-chocolate-brown round eye border
+      // Crisp dark-chocolate-brown eye border following the exact clean shape (round or flat-top bowl!)
       ctx.strokeStyle = OUTLINE_COLOR;
-      ctx.lineWidth = 3.1;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, eyeRx, eyeRy, 0, 0, Math.PI * 2);
+      ctx.lineWidth = 3.2;
+      ctx.lineJoin = 'round';
+      traceEyeShape();
       ctx.stroke();
 
-      // Re-stroke grumpy flat brow overhang slightly outside rim for authentic sticker #4 punch!
-      if (this.grumpyAmount > 0.12) {
-        const lidDrop = -eyeRy * 1.05 + this.grumpyAmount * (eyeRy * 1.08);
-        const tiltDelta = side * (-eyeRy * 0.18 * this.grumpyAmount);
-        const yL = side === -1 ? lidDrop - tiltDelta : lidDrop + tiltDelta;
-        const yR = side === -1 ? lidDrop + tiltDelta : lidDrop - tiltDelta;
+      // Slightly bolder crisp flat upper lash line with subtle outer flick when grumpy (sticker #2!)
+      if (gAmt > 0.08) {
+        const cutBaseY = -eyeRy * (1.0 - 0.56 * gAmt);
+        const slant = eyeRy * 0.19 * gAmt;
+        const yLeft = side === -1 ? cutBaseY - slant : cutBaseY + slant;
+        const yRight = side === -1 ? cutBaseY + slant : cutBaseY - slant;
+        const sinL = Math.max(-0.96, Math.min(0.96, yLeft / eyeRy));
+        const sinR = Math.max(-0.96, Math.min(0.96, yRight / eyeRy));
+        const xLeft = -eyeRx * Math.sqrt(Math.max(0.04, 1 - sinL * sinL));
+        const xRight = eyeRx * Math.sqrt(Math.max(0.04, 1 - sinR * sinR));
+        const outerExt = 2.8 * gAmt;
+
         ctx.strokeStyle = OUTLINE_COLOR;
-        ctx.lineWidth = 3.6;
+        ctx.lineWidth = 3.2 + 1.1 * gAmt;
         ctx.lineCap = 'round';
         ctx.beginPath();
-        ctx.moveTo(-eyeRx * 0.98, yL);
-        ctx.lineTo(eyeRx * 0.98, yR);
+        ctx.moveTo(xLeft - (side === -1 ? outerExt : 0), yLeft);
+        ctx.lineTo(xRight + (side === 1 ? outerExt : 0), yRight);
         ctx.stroke();
       }
 
@@ -868,9 +963,9 @@ export class HubaoRenderer {
     layout: DaFeiYuLayout,
   ): void {
     const g = this.computeGeom(now, layout);
-    const shL = g.bodyPointToWorld(0.24, 0.42);
-    const shR = g.bodyPointToWorld(0.76, 0.42);
-    const tailRoot = g.bodyPointToWorld(0.76, 0.72);
+    const shL = g.bodyPointToWorld(0.22, 0.44);
+    const shR = g.bodyPointToWorld(0.78, 0.44);
+    const tailRoot = g.bodyPointToWorld(0.82, 0.68);
 
     const isPetted = !layout.privacyMode && layout.petEnergy > 0.25;
     const mouseMode =
@@ -972,43 +1067,52 @@ export class HubaoRenderer {
     this.leftHand.squash *= Math.exp(-14 * dt);
     this.rightHand.squash *= Math.exp(-14 * dt);
 
+    const awakeAlpha = Math.max(0, 1 - this.sleepAmount * 1.25);
     const maxMouseReach = layout.is108 ? 108 : 96;
-    this.drawUnifiedStickerPaw(
-      ctx,
-      shL.x,
-      shL.y,
-      this.leftHand.x,
-      this.leftHand.y,
-      'left',
-      this.leftHand.squash,
-      layout.privacyMode ? 128 : mouseMode ? maxMouseReach : 92,
-      showToeBeans,
-    );
-    this.drawUnifiedStickerPaw(
-      ctx,
-      shR.x,
-      shR.y,
-      this.rightHand.x,
-      this.rightHand.y,
-      'right',
-      this.rightHand.squash,
-      layout.privacyMode ? 128 : mouseMode ? 96 : 92,
-      showToeBeans,
-    );
+    if (awakeAlpha > 0.01) {
+      ctx.save();
+      ctx.globalAlpha = awakeAlpha;
+      this.drawUnifiedStickerPaw(
+        ctx,
+        shL.x,
+        shL.y,
+        this.leftHand.x,
+        this.leftHand.y,
+        'left',
+        this.leftHand.squash,
+        layout.privacyMode ? 128 : mouseMode ? maxMouseReach : 92,
+        showToeBeans,
+      );
+      this.drawUnifiedStickerPaw(
+        ctx,
+        shR.x,
+        shR.y,
+        this.rightHand.x,
+        this.rightHand.y,
+        'right',
+        this.rightHand.squash,
+        layout.privacyMode ? 128 : mouseMode ? 96 : 92,
+        showToeBeans,
+      );
+      ctx.restore();
+    }
 
-    // 4) Original hand-drawn sticker FX particles (blue sigh cloud / pink heart / yellow star!)
+    // 4) Original hand-drawn sticker FX particles (blue sigh cloud / pink heart / yellow star / Zzz!)
     for (const p of this.particles) {
       const fxImg = this.fx[p.kind];
       if (!fxImg || !fxImg.complete || fxImg.naturalWidth <= 0) continue;
       ctx.save();
-      const fadeIn = Math.min(1, (1 - p.life) * 5.5);
+      const fadeIn = Math.min(1, (1 - p.life) * 5.0);
       const fadeOut = Math.min(1, p.life * 2.2);
       ctx.globalAlpha = Math.max(0, Math.min(1, fadeIn * fadeOut));
       ctx.translate(p.x, p.y);
       ctx.rotate(p.rot);
-      const baseSize = p.kind === 'sigh' ? 32 : 25;
+      const baseSize = p.kind === 'sigh' ? 32 : p.kind === 'zzz' ? 24 : 25;
       const aspect = fxImg.naturalWidth / fxImg.naturalHeight;
-      const pop = 0.85 + Math.sin(Math.min(1, (1 - p.life) * 3) * Math.PI * 0.5) * 0.22;
+      const pop =
+        p.kind === 'zzz'
+          ? 0.55 + (1 - p.life) * 0.72
+          : 0.85 + Math.sin(Math.min(1, (1 - p.life) * 3) * Math.PI * 0.5) * 0.22;
       const dw = baseSize * p.scale * pop * aspect;
       const dh = baseSize * p.scale * pop;
       ctx.drawImage(fxImg, -dw * 0.5, -dh * 0.5, dw, dh);
@@ -1058,7 +1162,7 @@ export class HubaoRenderer {
       const nx = -ty / len;
       const ny = tx / len;
       const puff = Math.sin(t * Math.PI);
-      const baseR = 11.2 + puff * 5.2 - t * 0.8;
+      const baseR = 12.6 + puff * 6.4 - t * 0.6;
       const sqBoost = t > 0.7 ? 1 + this.tail.squash * 0.15 : 1;
       pts.push({ x, y, nx, ny, r: baseR * sqBoost });
     }
@@ -1151,8 +1255,8 @@ export class HubaoRenderer {
     const ang = Math.atan2(dy, dx);
     const sgn = side === 'left' ? -1 : 1;
 
-    const rSh = 12.6;
-    const rPaw = 11.4;
+    const rSh = 14.4;
+    const rPaw = 12.2;
     const midX = (sx + px) * 0.5 + nx * (sgn * 3.0);
     const midY = (sy + py) * 0.5 + ny * (sgn * 3.0);
 

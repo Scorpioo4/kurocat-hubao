@@ -366,6 +366,44 @@ html.win7-ulw-mode #collar-row {
   border-color: rgba(200, 245, 56, 0.85);
 }
 
+.sleep-pills {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.sleep-custom-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.sleep-custom-label,
+.sleep-custom-unit {
+  font-size: 11px;
+  color: rgba(244, 246, 248, 0.68);
+}
+
+.sleep-sec-input {
+  width: 68px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: #f4f6f8;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: center;
+  outline: none;
+}
+
+.sleep-sec-input:focus {
+  border-color: rgba(242, 198, 138, 0.85);
+  background: rgba(242, 198, 138, 0.14);
+}
+
 .tail-picker-bar {
   --tail-picker-action-width: 46px;
   --tail-picker-button-height: 23px;

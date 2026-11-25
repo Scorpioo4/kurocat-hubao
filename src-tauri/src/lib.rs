@@ -340,6 +340,7 @@ fn update_settings(app: AppHandle, state: State<'_, AppState>, mut patch: AppSet
     patch.render_mode = config::normalize_render_mode(&patch.render_mode);
     patch.collar_color = config::normalize_collar_color(&patch.collar_color);
     patch.headphone_mode = config::normalize_headphone_mode(&patch.headphone_mode);
+    patch.sleep_after_sec = config::normalize_sleep_after_sec(patch.sleep_after_sec);
 
     let (prev_autostart, prev_scale, prev_layout, prev_obs_hide) = {
         let s = state.settings.lock().unwrap();
