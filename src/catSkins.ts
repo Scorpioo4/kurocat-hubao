@@ -217,4 +217,14 @@ export const DEFAULT_BUILTIN_CATS: CatSkinConfig[] = [
     accentColor: '#5cc8ff',
     accentSideColor: '#2563eb',
   },
+  {
+    id: 'hubao',
+    name: '虎宝',
+    emoji: '🐱',
+    builtin: true,
+    furColor: '#f3e5d1',
+    eyeColorTop: '#8f9e52',
+    accentColor: '#f2c68a',
+    accentSideColor: '#c89558',
+  },
 ];

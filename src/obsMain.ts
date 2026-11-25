@@ -102,8 +102,12 @@ let currentSettings: ObsAppSettings = {
   headphoneMode: 'off',
 };
 
+function isSpriteObsBreed(id: string | undefined): boolean {
+  return id === 'dafeiyu' || id === 'hubao';
+}
+
 function computeObsHeadphonesOn(activeCat: CatSkinConfig | undefined): boolean {
-  if (activeCat?.id === 'dafeiyu') return false;
+  if (isSpriteObsBreed(activeCat?.id)) return false;
   const hm: ObsHeadphoneMode =
     overrideHeadphones ||
     (currentSettings.headphoneMode === 'auto' || currentSettings.headphoneMode === 'on'
@@ -124,7 +128,7 @@ function syncObs3D(
   tailIds: string[],
   showBubbles: boolean,
 ): void {
-  const want3d = mode === '3d' && activeCat?.id !== 'dafeiyu' && !webglBlocked;
+  const want3d = mode === '3d' && !isSpriteObsBreed(activeCat?.id) && !webglBlocked;
   if (!want3d) {
     if (active3d) {
       engine3d?.stop();

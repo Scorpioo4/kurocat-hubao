@@ -10,10 +10,11 @@ import {
 import { catAudio } from './audio';
 import { resolveCustomSkin, type CatSkinConfig, type ResolvedSkin } from './catSkins';
 import { DaFeiYuRenderer, type DaFeiYuLayout } from './dafeiyuRenderer';
+import { HubaoRenderer } from './hubaoRenderer';
 
 export const LOGICAL_W = 420;
 export const LOGICAL_H = 440;
-export type CatBreed = 'black' | 'ragdoll' | 'dafeiyu';
+export type CatBreed = 'black' | 'ragdoll' | 'dafeiyu' | 'hubao';
 export type KeyboardOrientation = 'cat' | 'viewer';
 export type TailKeyMode = 'smart' | 'custom' | 'edge' | 'off';
 
@@ -241,6 +242,13 @@ export class KuroCatEngine {
   private renderScale = 1.0;
   private embedded = false;
   private dafeiyu = new DaFeiYuRenderer();
+  private hubao = new HubaoRenderer();
+
+  private getSpriteCompanion(): DaFeiYuRenderer | HubaoRenderer | null {
+    if (this.catBreed === 'dafeiyu') return this.dafeiyu;
+    if (this.catBreed === 'hubao') return this.hubao;
+    return null;
+  }
   private catTail = {
     heldVks: new Set<number>(),
     targetX: 320,
@@ -263,6 +271,7 @@ export class KuroCatEngine {
     this.wakeRendering();
     this.privacyMode = active;
     this.dafeiyu.onPrivacyModeChanged(active);
+    this.hubao.onPrivacyModeChanged(active);
     if (active) {
       this.heldKeys.clear();
       this.catTail.heldVks.clear();
@@ -279,8 +288,9 @@ export class KuroCatEngine {
   public onPrivacyTyping(): void {
     this.privacyTypingAt = performance.now();
     this.wakeRendering(this.privacyTypingAt);
-    if (this.catBreed === 'dafeiyu') {
-      this.dafeiyu.onPrivacyTyping();
+    const sp = this.getSpriteCompanion();
+    if (sp) {
+      sp.onPrivacyTyping();
     }
   }
 
@@ -348,8 +358,9 @@ export class KuroCatEngine {
       anim.lastHitAt = now;
     }
     const targetPt = this.getTailTargetPoint(spec);
-    if (this.catBreed === 'dafeiyu') {
-      this.dafeiyu.triggerTailPreview(targetPt, this.buildDaFeiYuLayout());
+    const sp = this.getSpriteCompanion();
+    if (sp) {
+      sp.triggerTailPreview(targetPt, this.buildDaFeiYuLayout());
       return;
     }
     if (!this.catTail.active && this.catTail.reach < 0.08) {
@@ -510,8 +521,9 @@ export class KuroCatEngine {
     let leftHeld = 0;
     let rightHeld = 0;
     let rightBusy = false;
-    if (this.catBreed === 'dafeiyu') {
-      const busy = this.dafeiyu.getHandBusyState(now);
+    const sp = this.getSpriteCompanion();
+    if (sp) {
+      const busy = sp.getHandBusyState(now);
       leftHeld = busy.leftHeld;
       rightHeld = busy.rightHeld;
       rightBusy = busy.rightBusy;
@@ -541,7 +553,7 @@ export class KuroCatEngine {
   }
 
   private syncLayoutPositions(): void {
-    const isBigFish = this.catBreed === 'dafeiyu';
+    const isBigFish = this.catBreed === 'dafeiyu' || this.catBreed === 'hubao';
     if (this.keyboardLayout === '108') {
       this.logicalW = 540;
       this.logicalH = 456;
@@ -576,6 +588,9 @@ export class KuroCatEngine {
       this.catBreed = 'dafeiyu';
       this.customSkin = null;
       catAudio.setPurrIntensity(0);
+    } else if (breedId === 'hubao') {
+      this.catBreed = 'hubao';
+      this.customSkin = null;
     } else if ((breedId === 'black' || breedId === 'ragdoll') && (!skin || skin.builtin)) {
       this.catBreed = breedId;
       this.customSkin = null;
@@ -906,7 +921,7 @@ export class KuroCatEngine {
   }
 
   private pokeAnnoy(amount: number, now: number): void {
-    if (this.catBreed === 'dafeiyu' || this.privacyMode) return;
+    if (this.catBreed === 'dafeiyu' || this.catBreed === 'hubao' || this.privacyMode) return;
     this.annoy = Math.max(0, Math.min(1, this.annoy + amount));
     this.lastPokeAt = now;
   }
@@ -924,7 +939,7 @@ export class KuroCatEngine {
   }
 
   private recordPointerSpeed(nx: number, ny: number, now: number): void {
-    if (this.catBreed === 'dafeiyu' || this.privacyMode) return;
+    if (this.catBreed === 'dafeiyu' || this.catBreed === 'hubao' || this.privacyMode) return;
     const gapMs = now - this.lastPointerSampleAt;
     if (
       this.lastPointerSampleX !== null &&
@@ -1078,7 +1093,8 @@ export class KuroCatEngine {
     const rawKeyPt = this.getKeyWorldCenter(spec);
     const useTail = this.shouldUseTailForKey(spec, rawKeyPt, activelyMousing, prevAnyKeyAt, now);
 
-    if (this.catBreed === 'dafeiyu') {
+    const spriteComp = this.getSpriteCompanion();
+    if (spriteComp) {
       const dafeiyuLayout = this.buildDaFeiYuLayout();
       const dafeiyuMouseBusy =
         dafeiyuLayout.mouseLeft ||
@@ -1088,7 +1104,7 @@ export class KuroCatEngine {
         useTail ||
         this.shouldUseTailForKey(spec, rawKeyPt, dafeiyuMouseBusy, prevAnyKeyAt, now);
       const pt = dafeiyuUseTail ? this.getTailTargetPoint(spec) : rawKeyPt;
-      this.dafeiyu.onKeyDown(vk, pt, dafeiyuLayout, repeat, dafeiyuUseTail);
+      spriteComp.onKeyDown(vk, pt, dafeiyuLayout, repeat, dafeiyuUseTail);
       if (this.showKeyBubbles) {
         const label = formatBubbleForVk(vk, spec);
         if (label) {
@@ -1236,6 +1252,7 @@ export class KuroCatEngine {
 
   public onKeyUp(vk: number): void {
     this.dafeiyu.onKeyUp(vk);
+    this.hubao.onKeyUp(vk);
     this.heldKeys.delete(vk);
     if (this.catTail.heldVks.has(vk)) {
       this.catTail.heldVks.delete(vk);
@@ -1286,8 +1303,9 @@ export class KuroCatEngine {
     if (!this.embedded) {
       this.recordPointerSpeed(nx, ny, now);
     }
-    this.mouseTargetOffsetX = (nx - 0.5) * (this.catBreed === 'dafeiyu' ? 14 : 20);
-    this.mouseTargetOffsetY = (ny - 0.5) * (this.catBreed === 'dafeiyu' ? 11 : 18);
+    const isSprite = this.catBreed === 'dafeiyu' || this.catBreed === 'hubao';
+    this.mouseTargetOffsetX = (nx - 0.5) * (isSprite ? 14 : 20);
+    this.mouseTargetOffsetY = (ny - 0.5) * (isSprite ? 11 : 18);
     this.lastMouseMoveAt = now;
 
     this.leftPaw.mode = 'mouse';
@@ -1297,18 +1315,22 @@ export class KuroCatEngine {
   private getMouseButtonColors(): { left: string; right: string; middle: string } {
     const primary = this.customSkin
       ? this.customSkin.accentColor
-      : this.catBreed === 'dafeiyu'
-        ? '#5cc8ff'
-        : this.catBreed === 'ragdoll'
-          ? '#7ac7ff'
-          : '#d4f044';
+      : this.catBreed === 'hubao'
+        ? '#f2c68a'
+        : this.catBreed === 'dafeiyu'
+          ? '#5cc8ff'
+          : this.catBreed === 'ragdoll'
+            ? '#7ac7ff'
+            : '#d4f044';
     const scroll = this.customSkin
       ? this.customSkin.accentSideColor
-      : this.catBreed === 'dafeiyu'
-        ? '#2563eb'
-        : this.catBreed === 'ragdoll'
-          ? '#4690d8'
-          : '#92ba12';
+      : this.catBreed === 'hubao'
+        ? '#c89558'
+        : this.catBreed === 'dafeiyu'
+          ? '#2563eb'
+          : this.catBreed === 'ragdoll'
+            ? '#4690d8'
+            : '#92ba12';
 
     // Pick a high-contrast complementary color for RMB so Left vs Right click are unmistakable on every skin
     const isWarmAccent = /^#(f[a-f0-9][89a-c]|ff[789a-c]|e[89a-f][789a])/i.test(primary);
@@ -1374,6 +1396,8 @@ export class KuroCatEngine {
     this.lastMouseClickAt = now;
     this.dafeiyu.resetLeftHandForMouse();
     this.dafeiyu.onMouseAction(now);
+    this.hubao.resetLeftHandForMouse();
+    this.hubao.onMouseAction(now);
     this.leftPaw.mode = 'mouse';
     this.leftPaw.impactSquash = 0.72;
     this.leftPaw.lastActiveAt = now;
@@ -1401,6 +1425,8 @@ export class KuroCatEngine {
     this.lastMouseClickAt = now;
     this.dafeiyu.resetLeftHandForMouse();
     this.dafeiyu.onMouseAction(now);
+    this.hubao.resetLeftHandForMouse();
+    this.hubao.onMouseAction(now);
     this.leftPaw.mode = 'mouse';
     this.leftPaw.lastActiveAt = now;
   }
@@ -1682,7 +1708,7 @@ export class KuroCatEngine {
       now - this.lastAnyKeyAt < 650 ||
       this.heldKeys.size > 0 ||
       this.catTail.heldVks.size > 0;
-    const isCatMode = this.catBreed !== 'dafeiyu';
+    const isCatMode = this.catBreed !== 'dafeiyu' && this.catBreed !== 'hubao';
 
     // 1) Alive cat emotional states: sleep (loaf + Zzz), curious (laser-pointer eyes), annoy -> cross (airplane ears + tail desk-thump), idle fidgets!
     const sleepAfterMs = this.embedded ? 18_000 : 28_000;
@@ -1877,8 +1903,9 @@ export class KuroCatEngine {
       : 0;
     this.earPerkSpring.step(earTarget, dt);
 
-    if (this.catBreed === 'dafeiyu') {
-      this.dafeiyu.update(dt, now, this.buildDaFeiYuLayout());
+    const spriteUpd = this.getSpriteCompanion();
+    if (spriteUpd) {
+      spriteUpd.update(dt, now, this.buildDaFeiYuLayout());
     } else {
       // Update plush cat tail key-patting physics for keys near the tail
       if (this.privacyMode || this.asleep) {
@@ -2192,13 +2219,14 @@ export class KuroCatEngine {
     const breath = Math.sin(this.elapsed * breathFreq) * (1.0 + this.sleepAmount * 0.65);
     const purrShift = this.squintAmount > 0.4 ? Math.sin(this.elapsed * 22) * 0.45 * this.squintAmount : 0;
 
-    if (this.catBreed === 'dafeiyu') {
+    const spriteRen = this.getSpriteCompanion();
+    if (spriteRen) {
       const now = performance.now();
       const layout = this.buildDaFeiYuLayout();
-      this.dafeiyu.renderBody(ctx, now, layout);
+      spriteRen.renderBody(ctx, now, layout);
       this.drawMiniMouse(ctx);
       this.drawKeyboard(ctx);
-      this.dafeiyu.renderForeground(ctx, this.lastDt, now, layout);
+      spriteRen.renderForeground(ctx, this.lastDt, now, layout);
       if (this.showKeyBubbles && !this.privacyMode) {
         this.drawKeyBubbles(ctx);
         this.drawMouseBadges(ctx);
@@ -3551,9 +3579,21 @@ export class KuroCatEngine {
     ctx.restore();
 
     const pickerAccentTop =
-      this.catBreed === 'dafeiyu' ? '#5cc8ff' : this.catBreed === 'ragdoll' ? '#7ac7ff' : '#c8f538';
+      this.catBreed === 'hubao'
+        ? '#f2c68a'
+        : this.catBreed === 'dafeiyu'
+          ? '#5cc8ff'
+          : this.catBreed === 'ragdoll'
+            ? '#7ac7ff'
+            : '#c8f538';
     const pickerAccentSide =
-      this.catBreed === 'dafeiyu' ? '#2563eb' : this.catBreed === 'ragdoll' ? '#4690d8' : '#8cb014';
+      this.catBreed === 'hubao'
+        ? '#c89558'
+        : this.catBreed === 'dafeiyu'
+          ? '#2563eb'
+          : this.catBreed === 'ragdoll'
+            ? '#4690d8'
+            : '#8cb014';
 
     ctx.fillStyle = '#24262c';
     ctx.strokeStyle = this.tailPickerActive ? pickerAccentTop : '#363840';
@@ -3600,18 +3640,22 @@ export class KuroCatEngine {
       if (press > 0.14) {
         topColor = this.customSkin
           ? this.customSkin.accentColor
-          : this.catBreed === 'dafeiyu'
-            ? '#5cc8ff'
-            : this.catBreed === 'ragdoll'
-              ? '#7ac7ff'
-              : '#d2f244';
+          : this.catBreed === 'hubao'
+            ? '#f2c68a'
+            : this.catBreed === 'dafeiyu'
+              ? '#5cc8ff'
+              : this.catBreed === 'ragdoll'
+                ? '#7ac7ff'
+                : '#d2f244';
         sideColor = this.customSkin
           ? this.customSkin.accentSideColor
-          : this.catBreed === 'dafeiyu'
-            ? '#2563eb'
-            : this.catBreed === 'ragdoll'
-              ? '#4690d8'
-              : '#8cb014';
+          : this.catBreed === 'hubao'
+            ? '#c89558'
+            : this.catBreed === 'dafeiyu'
+              ? '#2563eb'
+              : this.catBreed === 'ragdoll'
+                ? '#4690d8'
+                : '#8cb014';
       } else if (isTailSelected) {
         topColor = pickerAccentTop;
         sideColor = pickerAccentSide;
@@ -3694,7 +3738,12 @@ export class KuroCatEngine {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       const dots = performance.now() - this.privacyTypingAt < 350 ? ' • • •' : '';
-      const label = this.catBreed === 'dafeiyu' ? '🔒 非礼勿视 · 已隐藏按键' : '🔒 密码输入中 · 已隐藏按键';
+      const label =
+        this.catBreed === 'hubao'
+          ? '🔒 虎宝捂眼 · 已隐藏按键'
+          : this.catBreed === 'dafeiyu'
+            ? '🔒 非礼勿视 · 已隐藏按键'
+            : '🔒 密码输入中 · 已隐藏按键';
       ctx.fillText(label + dots, 0, 0);
       ctx.restore();
     }

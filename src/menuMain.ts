@@ -191,9 +191,10 @@ function syncUI(): void {
   document.querySelectorAll<HTMLButtonElement>('[data-collar]').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.collar === collarColor);
   });
+  const isSpriteBreed = settings.catBreed === 'dafeiyu' || settings.catBreed === 'hubao';
   const collarRowEl = document.getElementById('collar-row');
   if (collarRowEl) {
-    collarRowEl.classList.toggle('hidden', renderMode === '2d' || settings.catBreed === 'dafeiyu');
+    collarRowEl.classList.toggle('hidden', renderMode === '2d' || isSpriteBreed);
   }
 
   const headphoneMode =
@@ -205,7 +206,7 @@ function syncUI(): void {
   });
   const headphoneRowEl = document.getElementById('headphone-row');
   if (headphoneRowEl) {
-    headphoneRowEl.classList.toggle('hidden', settings.catBreed === 'dafeiyu');
+    headphoneRowEl.classList.toggle('hidden', isSpriteBreed);
   }
 
   const headerEl = document.getElementById('menu-header');
