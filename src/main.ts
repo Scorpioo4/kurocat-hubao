@@ -186,7 +186,7 @@ let privacyActive = false;
 let gameActive = false;
 
 function isSpriteCompanionBreed(breed: string | undefined): boolean {
-  return breed === 'dafeiyu' || breed === 'hubao';
+  return breed === 'dafeiyu' || breed === 'hubao' || breed === 'xiaonian';
 }
 
 function shouldWearHeadphonesNow(): boolean {

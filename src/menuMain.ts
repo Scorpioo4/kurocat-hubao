@@ -242,7 +242,8 @@ function syncUI(): void {
   document.querySelectorAll<HTMLButtonElement>('[data-collar]').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.collar === collarColor);
   });
-  const isSpriteBreed = settings.catBreed === 'dafeiyu' || settings.catBreed === 'hubao';
+  const isSpriteBreed =
+    settings.catBreed === 'dafeiyu' || settings.catBreed === 'hubao' || settings.catBreed === 'xiaonian';
   const collarRowEl = document.getElementById('collar-row');
   if (collarRowEl) {
     collarRowEl.classList.toggle('hidden', renderMode === '2d' || isSpriteBreed);

@@ -103,7 +103,7 @@ let currentSettings: ObsAppSettings = {
 };
 
 function isSpriteObsBreed(id: string | undefined): boolean {
-  return id === 'dafeiyu' || id === 'hubao';
+  return id === 'dafeiyu' || id === 'hubao' || id === 'xiaonian';
 }
 
 function computeObsHeadphonesOn(activeCat: CatSkinConfig | undefined): boolean {
